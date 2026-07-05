@@ -1,0 +1,359 @@
+import 'dotenv/config';
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import nodemailer from 'nodemailer';
+import multer from 'multer';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { body, validationResult } from 'express-validator';
+import { rateLimit } from 'express-rate-limit';
+import {
+  readContent,
+  updateCompany,
+  createPortfolioItem,
+  updatePortfolioItem,
+  deletePortfolioItem,
+} from './contentStore.js';
+import { verifyPassword, issueToken, revokeToken, requireAdmin } from './auth.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const app = express();
+const PORT = process.env.PORT || 4000;
+const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
+
+// --- Core middleware -------------------------------------------------------
+app.use(helmet({ crossOriginResourcePolicy: false }));
+app.use(cors({ origin: CLIENT_ORIGIN }));
+app.use(express.json({ limit: '10kb' }));
+
+// Serves uploaded portfolio images (e.g. /uploads/1719999999-cover.jpg)
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// --- Rate limiting -----------------------------------------------------
+// Anti-spam: limits each IP to 5 contact submissions per 15 minutes.
+const contactLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many submissions from this IP. Please try again later.',
+  },
+});
+
+// Anti-brute-force: limits login attempts to 10 per 15 minutes per IP.
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many login attempts. Please try again later.' },
+});
+
+// --- Image uploads -----------------------------------------------------
+const uploadStorage = multer.diskStorage({
+  destination: path.join(__dirname, 'uploads'),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
+  },
+});
+
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+
+const upload = multer({
+  storage: uploadStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (req, file, cb) => {
+    if (!ALLOWED_IMAGE_TYPES.includes(file.mimetype)) {
+      return cb(new Error('Only JPEG, PNG, WEBP, or GIF images are allowed.'));
+    }
+    cb(null, true);
+  },
+});
+
+// --- Mail transport ----------------------------------------------------
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: Number(process.env.SMTP_PORT) || 465,
+  secure: process.env.SMTP_SECURE !== 'false',
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
+
+// --- Validation rules ----------------------------------------------------
+const contactValidationRules = [
+  body('name').trim().notEmpty().withMessage('Name is required.').isLength({ max: 100 }),
+  body('email').trim().notEmpty().withMessage('Email is required.').isEmail().withMessage('Enter a valid email address.').normalizeEmail(),
+  body('phone').optional({ checkFalsy: true }).trim().isLength({ max: 30 }).escape(),
+  body('company').optional({ checkFalsy: true }).trim().isLength({ max: 150 }).escape(),
+  body('service').trim().notEmpty().withMessage('Please select a service.').isLength({ max: 100 }).escape(),
+  body('budget').optional({ checkFalsy: true }).trim().isLength({ max: 100 }).escape(),
+  body('message').trim().notEmpty().withMessage('Message is required.').isLength({ min: 20, max: 5000 }).withMessage('Message must be between 20 and 5000 characters.').escape(),
+];
+
+function buildEmailHtml({ name, email, phone, company, service, budget, message }) {
+  const row = (label, value) =>
+    value
+      ? `<tr>
+           <td style="padding:10px 16px;color:#64748B;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;">${label}</td>
+           <td style="padding:10px 16px;color:#0A0F1D;font-size:14px;">${value}</td>
+         </tr>`
+      : '';
+
+  return `
+  <div style="background:#F8FAFC;padding:32px;font-family:Arial,Helvetica,sans-serif;">
+    <div style="max-width:560px;margin:0 auto;background:#FFFFFF;border-radius:12px;overflow:hidden;border:1px solid #E2E8F0;">
+      <div style="background:linear-gradient(120deg,#2563EB,#06B6D4);padding:24px 32px;">
+        <h1 style="color:#FFFFFF;font-size:18px;margin:0;">New Project Inquiry — iFeX International</h1>
+      </div>
+      <table style="width:100%;border-collapse:collapse;">
+        ${row('Name', name)}
+        ${row('Email', email)}
+        ${row('Phone', phone)}
+        ${row('Company', company)}
+        ${row('Service Needed', service)}
+        ${row('Budget Range', budget)}
+      </table>
+      <div style="padding:16px 32px 28px;">
+        <p style="color:#64748B;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;margin:0 0 8px;">Message</p>
+        <p style="color:#0A0F1D;font-size:14px;line-height:1.6;white-space:pre-wrap;margin:0;">${message}</p>
+      </div>
+    </div>
+  </div>`;
+}
+
+// --- Routes ----------------------------------------------------------------
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok' });
+});
+
+app.post('/api/contact', contactLimiter, contactValidationRules, async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      message: errors.array()[0].msg,
+      errors: errors.array(),
+    });
+  }
+
+  const { name, email, phone, company, service, budget, message } = req.body;
+
+  try {
+    await transporter.sendMail({
+      from: `"iFeX Website" <${process.env.CONTACT_SENDER_EMAIL}>`,
+      to: process.env.CONTACT_RECEIVER_EMAIL,
+      replyTo: email,
+      subject: `New Inquiry: ${service} — ${name}`,
+      html: buildEmailHtml({ name, email, phone, company, service, budget, message }),
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Your message has been sent successfully.',
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('Failed to send contact email:', err.message);
+    return res.status(502).json({
+      success: false,
+      message: 'We could not send your message right now. Please try again shortly.',
+    });
+  }
+});
+
+// --- Public content routes --------------------------------------------
+// Read-only: powers the live site (company details + portfolio).
+app.get('/api/content', async (req, res) => {
+  try {
+    const content = await readContent();
+    res.json({ success: true, data: content });
+  } catch (err) {
+    console.error('Failed to read content:', err.message);
+    res.status(500).json({ success: false, message: 'Could not load site content.' });
+  }
+});
+
+// --- Admin auth routes ---------------------------------------------------
+app.post(
+  '/api/admin/login',
+  loginLimiter,
+  body('password').isString().notEmpty(),
+  (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, message: 'Password is required.' });
+    }
+    if (!verifyPassword(req.body.password)) {
+      return res.status(401).json({ success: false, message: 'Incorrect password.' });
+    }
+    const token = issueToken();
+    res.json({ success: true, token });
+  }
+);
+
+app.post('/api/admin/logout', requireAdmin, (req, res) => {
+  const token = req.headers.authorization.slice(7);
+  revokeToken(token);
+  res.json({ success: true });
+});
+
+app.get('/api/admin/session', requireAdmin, (req, res) => {
+  res.json({ success: true });
+});
+
+// --- Admin: company details ---------------------------------------------
+app.put(
+  '/api/admin/company',
+  requireAdmin,
+  [
+    body('name').optional().trim().isLength({ max: 150 }),
+    body('tagline').optional().trim().isLength({ max: 150 }),
+    body('heroHeadline').optional().trim().isLength({ max: 300 }),
+    body('heroSubtext').optional().trim().isLength({ max: 600 }),
+    body('email').optional().trim().isEmail().withMessage('Enter a valid email address.'),
+    body('phone').optional().trim().isLength({ max: 40 }),
+    body('location').optional().trim().isLength({ max: 150 }),
+    body('mission').optional().trim().isLength({ max: 800 }),
+    body('vision').optional().trim().isLength({ max: 800 }),
+    body('pricingVisible').optional().isBoolean().withMessage('Pricing visibility must be true or false.'),
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, message: errors.array()[0].msg });
+    }
+    try {
+      const {
+        name, tagline, heroHeadline, heroSubtext, email, phone, location,
+        socials, mission, vision, stats, pricingVisible,
+      } = req.body;
+      const updated = await updateCompany({
+        ...(name !== undefined && { name }),
+        ...(tagline !== undefined && { tagline }),
+        ...(heroHeadline !== undefined && { heroHeadline }),
+        ...(heroSubtext !== undefined && { heroSubtext }),
+        ...(email !== undefined && { email }),
+        ...(phone !== undefined && { phone }),
+        ...(location !== undefined && { location }),
+        ...(socials !== undefined && { socials }),
+        ...(mission !== undefined && { mission }),
+        ...(vision !== undefined && { vision }),
+        ...(stats !== undefined && { stats }),
+        ...(pricingVisible !== undefined && { pricingVisible }),
+      });
+      res.json({ success: true, data: updated });
+    } catch (err) {
+      console.error('Failed to update company:', err.message);
+      res.status(500).json({ success: false, message: 'Could not save company details.' });
+    }
+  }
+);
+
+// --- Admin: portfolio CRUD ------------------------------------------------
+app.post(
+  '/api/admin/portfolio',
+  requireAdmin,
+  [
+    body('title').trim().notEmpty().withMessage('Title is required.').isLength({ max: 150 }),
+    // Support either a single `category` string (legacy) or a `categories` array
+    body('category').optional().trim().isLength({ max: 100 }),
+    body('categories').optional().isArray().withMessage('Categories must be an array.'),
+    body('categories.*').optional().trim().isLength({ max: 100 }),
+    body('summary').trim().notEmpty().withMessage('Summary is required.').isLength({ max: 400 }),
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, message: errors.array()[0].msg });
+    }
+    try {
+      const { title, category, categories, summary, tags, featured, image, images } = req.body;
+      const categoriesArr = Array.isArray(categories)
+        ? categories.filter(Boolean)
+        : category
+        ? [category]
+        : [];
+
+      const item = await createPortfolioItem({
+        title,
+        category: categoriesArr[0] || category || 'Websites',
+        categories: categoriesArr,
+        summary,
+        tags: Array.isArray(tags) ? tags : [],
+        featured: !!featured,
+        image: image || '',
+        images: Array.isArray(images) ? images : [],
+      });
+      res.status(201).json({ success: true, data: item });
+    } catch (err) {
+      console.error('Failed to create portfolio item:', err.message);
+      res.status(500).json({ success: false, message: 'Could not create project.' });
+    }
+  }
+);
+
+app.put('/api/admin/portfolio/:id', requireAdmin, async (req, res) => {
+  try {
+    const { title, category, categories, summary, tags, featured, image, images } = req.body;
+    const categoriesArr = Array.isArray(categories)
+      ? categories.filter(Boolean)
+      : category
+      ? [category]
+      : undefined;
+
+    const updated = await updatePortfolioItem(req.params.id, {
+      ...(title !== undefined && { title }),
+      ...(categoriesArr !== undefined && { categories: categoriesArr }),
+      ...(category !== undefined && { category: category }),
+      ...(summary !== undefined && { summary }),
+      ...(tags !== undefined && { tags: Array.isArray(tags) ? tags : [] }),
+      ...(featured !== undefined && { featured: !!featured }),
+      ...(image !== undefined && { image }),
+      ...(images !== undefined && { images: Array.isArray(images) ? images : [] }),
+    });
+    if (!updated) {
+      return res.status(404).json({ success: false, message: 'Project not found.' });
+    }
+    res.json({ success: true, data: updated });
+  } catch (err) {
+    console.error('Failed to update portfolio item:', err.message);
+    res.status(500).json({ success: false, message: 'Could not update project.' });
+  }
+});
+
+app.delete('/api/admin/portfolio/:id', requireAdmin, async (req, res) => {
+  try {
+    const deleted = await deletePortfolioItem(req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ success: false, message: 'Project not found.' });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Failed to delete portfolio item:', err.message);
+    res.status(500).json({ success: false, message: 'Could not delete project.' });
+  }
+});
+
+// --- Admin: image upload --------------------------------------------------
+app.post('/api/admin/upload', requireAdmin, (req, res) => {
+  upload.single('image')(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ success: false, message: err.message });
+    }
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No image file received.' });
+    }
+    res.status(201).json({ success: true, url: `/uploads/${req.file.filename}` });
+  });
+});
+
+app.listen(PORT, () => {
+  // eslint-disable-next-line no-console
+  console.log(`iFeX API server running on port ${PORT}`);
+});

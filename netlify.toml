@@ -1,0 +1,15 @@
+[build]
+command = "npm run build"
+publish = "dist"
+
+[build.environment]
+NODE_VERSION = "20"
+
+[[redirects]]
+from = "/api/*"
+to = "/.netlify/functions/:splat"
+status = 200
+
+[context.production.environment]
+# Set your production backend URL here
+VITE_API_URL = "https://your-render-backend-url.com/api"

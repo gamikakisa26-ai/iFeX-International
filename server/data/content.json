@@ -1,0 +1,105 @@
+{
+  "company": {
+    "name": "iFeX International",
+    "tagline": "Engineering the Future",
+    "heroHeadline": "Engineering Intelligent Digital Solutions for Modern Businesses",
+    "heroSubtext": "iFeX International builds premium websites, ERP systems, mobile apps, and applied AI automation — engineered for performance, security, and scale at every stage of growth.",
+    "email": "ifexinternational@gmail.com",
+    "phone": "+94 71 421 3561",
+    "location": "No 23/30, 500 Acres, New Town, Polonnaruwa",
+    "socials": {
+      "linkedin": "https://www.linkedin.com/company/cofifex",
+      "twitter": "",
+      "github": "",
+      "facebook": "https://www.facebook.com/ifex.international",
+      "instagram": "https://www.instagram.com/ifex_international/",
+      "whatsapp": "https://wa.link/847tzf"
+    },
+    "mission": "To Deliver Secure, Scalable, and Innovative Technology Solutions.",
+    "vision": "A world where every ambitious company has access to great engineering.",
+    "pricingVisible": false,
+    "stats": [
+      {
+        "value": 5,
+        "suffix": "+",
+        "label": "Projects Delivered"
+      },
+      {
+        "value": 100,
+        "suffix": "%",
+        "label": "Client Retention"
+      },
+      {
+        "value": 15,
+        "suffix": "+",
+        "label": "Industries Served"
+      },
+      {
+        "value": 24,
+        "suffix": "/7",
+        "label": "Support Coverage"
+      }
+    ]
+  },
+  "portfolio": [
+    {
+      "id": "p1783187321526",
+      "title": "Developed the Mobile Application for SlipX",
+      "category": "Mobile",
+      "summary": "Developed the **SlipX Mobile Application** for **slipx.online**, replicating the web platform's interface and features. The app enables secure payment slip verification, fraud detection, and includes **full Admin Panel access** for managing users and verification activities directly from mobile.",
+      "tags": [
+        "Flutter",
+        "Dart",
+        "PHP",
+        "MySQL"
+      ],
+      "featured": true,
+      "image": "/uploads/1783187087173-918376987.png",
+      "images": [
+        "/uploads/1783187087173-918376987.png",
+        "/uploads/1783188155656-844776913.png",
+        "/uploads/1783188159683-112521112.png"
+      ]
+    },
+    {
+      "id": "p1783186090676",
+      "title": "Modern ERP for Ishan Motors",
+      "category": "ERP",
+      "summary": "Developed a custom ERP System for Ishan Motors from the ground up to manage inventory, invoicing, customers, sales, and daily business operations. The system features a modern Light & Dark interface, real-time dashboard, advanced reporting, responsive design, and secure user management, providing a scalable and efficient solution for streamlining business workflows.",
+      "tags": [
+        "PHP",
+        "MySQL",
+        "JavaScript (Vanilla JS)",
+        "CSS",
+        "Custom Properties"
+      ],
+      "featured": true,
+      "image": "/uploads/1783188369221-329488941.png",
+      "images": [
+        "/uploads/1783188369221-329488941.png",
+        "/uploads/1783188385611-578017858.png",
+        "/uploads/1783188391696-790423947.png"
+      ]
+    },
+    {
+      "id": "p1783185753263",
+      "title": "Fully Customized  Business Website for Ishan Motors",
+      "category": "Websites",
+      "summary": "Implemented A modern 5-page business website for Ishan Motors featuring Dark & Light modes, English, Sinhala & Tamil language support, and a digital contact card. Built for speed, responsiveness, and a seamless user experience.",
+      "tags": [
+        "HTML",
+        "CSS",
+        "JavaScript",
+        "PHP",
+        "MySQL"
+      ],
+      "featured": true,
+      "image": "/uploads/1783186110109-833355707.png",
+      "images": [
+        "/uploads/1783186110109-833355707.png",
+        "/uploads/1783188416870-243305612.png",
+        "/uploads/1783188451386-465488137.png"
+      ]
+    }
+  ]
+}
