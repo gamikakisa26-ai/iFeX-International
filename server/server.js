@@ -79,24 +79,52 @@ const SMTP_USER = process.env.SMTP_USER;
 const CONTACT_SENDER_EMAIL = process.env.CONTACT_SENDER_EMAIL || SMTP_USER;
 const CONTACT_RECEIVER_EMAIL = process.env.CONTACT_RECEIVER_EMAIL || SMTP_USER;
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT) || 465,
-  secure: process.env.SMTP_SECURE !== 'false',
-  auth: {
-    user: SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
+// Create transporter with a fallback (try configured port first, then 587)
+let transporter;
+const smtpHost = process.env.SMTP_HOST;
+const configuredPort = Number(process.env.SMTP_PORT) || 465;
+const configuredSecure = process.env.SMTP_SECURE !== 'false';
+const smtpAuth = { user: SMTP_USER, pass: process.env.SMTP_PASS };
 
-// Verify SMTP config at startup so failures are visible in logs
-transporter.verify().then(() => {
+const smtpCandidates = [
+  { host: smtpHost, port: configuredPort, secure: configuredSecure },
+  // fallback: submission port with STARTTLS
+  { host: smtpHost, port: 587, secure: false, tls: { ciphers: 'TLSv1.2' } },
+];
+
+(async function initSmtp() {
+  for (const cfg of smtpCandidates) {
+    try {
+      const candidate = nodemailer.createTransport({
+        host: cfg.host,
+        port: cfg.port,
+        secure: cfg.secure,
+        auth: smtpAuth,
+        tls: cfg.tls || undefined,
+        // short timeouts to fail fast and get actionable logs
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 10000,
+        logger: false,
+        debug: false,
+      });
+
+      // attempt verify
+      await candidate.verify();
+      transporter = candidate;
+      // eslint-disable-next-line no-console
+      console.log(`SMTP connection verified using ${cfg.host}:${cfg.port} (secure=${cfg.secure})`);
+      return;
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error(`SMTP verification failed for ${cfg.host}:${cfg.port} (secure=${cfg.secure}):`, err && err.code ? { code: err.code, message: err.message } : err);
+      // try next candidate
+    }
+  }
+
   // eslint-disable-next-line no-console
-  console.log('SMTP connection verified');
-}).catch((err) => {
-  // eslint-disable-next-line no-console
-  console.error('SMTP verification failed:', err);
-});
+  console.error('All SMTP verification attempts failed. Email sending will likely fail.');
+})();
 
 // --- Validation rules ----------------------------------------------------
 const contactValidationRules = [
