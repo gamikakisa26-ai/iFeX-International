@@ -19,6 +19,7 @@ import {
   deletePortfolioItem,
 } from './contentStore.js';
 import { verifyPassword, issueToken, revokeToken, requireAdmin } from './auth.js';
+import { buildPublicImageUrl } from './lib/imageUrls.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -224,8 +225,8 @@ app.get('/api/content', async (req, res) => {
     const origin = `${req.protocol}://${req.get('host')}`;
     const normalizeProject = (project) => ({
       ...project,
-      image: project.image && project.image.startsWith('/uploads/') ? `${origin}${project.image}` : project.image,
-      images: project.images?.map((img) => (img && img.startsWith('/uploads/') ? `${origin}${img}` : img)) || [],
+      image: buildPublicImageUrl(req, project.image),
+      images: project.images?.map((img) => buildPublicImageUrl(req, img)) || [],
     });
 
     const normalized = {
@@ -442,8 +443,7 @@ app.post('/api/admin/upload', requireAdmin, (req, res) => {
       // ensure uploads dir exists
       await fs.mkdir(outPath, { recursive: true });
       await fs.writeFile(path.join(outPath, filename), req.file.buffer);
-      const origin = `${req.protocol}://${req.get('host')}`;
-      const url = `${origin}/uploads/${filename}`;
+      const url = buildPublicImageUrl(req, `/uploads/${filename}`);
       return res.status(201).json({ success: true, url });
     } catch (diskErr) {
       console.error('Local upload failed:', diskErr);
