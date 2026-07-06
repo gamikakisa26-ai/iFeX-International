@@ -172,7 +172,26 @@ app.post('/api/contact', contactLimiter, contactValidationRules, async (req, res
 app.get('/api/content', async (req, res) => {
   try {
     const content = await readContent();
-    res.json({ success: true, data: content });
+    const origin = `${req.protocol}://${req.get('host')}`;
+    const normalizeProject = (project) => ({
+      ...project,
+      image: project.image && project.image.startsWith('/uploads/') ? `${origin}${project.image}` : project.image,
+      images: project.images?.map((img) => (img && img.startsWith('/uploads/') ? `${origin}${img}` : img)) || [],
+    });
+
+    const normalized = {
+      ...content,
+      portfolio: content.portfolio?.map(normalizeProject) || [],
+      company: content.company ? { ...content.company } : undefined,
+    };
+
+    if (normalized.company) {
+      if (normalized.company.logo && normalized.company.logo.startsWith('/uploads/')) {
+        normalized.company.logo = `${origin}${normalized.company.logo}`;
+      }
+    }
+
+    res.json({ success: true, data: normalized });
   } catch (err) {
     console.error('Failed to read content:', err.message);
     res.status(500).json({ success: false, message: 'Could not load site content.' });
@@ -349,7 +368,9 @@ app.post('/api/admin/upload', requireAdmin, (req, res) => {
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'No image file received.' });
     }
-    res.status(201).json({ success: true, url: `/uploads/${req.file.filename}` });
+    const origin = `${req.protocol}://${req.get('host')}`;
+    const url = `${origin}/uploads/${req.file.filename}`;
+    res.status(201).json({ success: true, url });
   });
 });
 
