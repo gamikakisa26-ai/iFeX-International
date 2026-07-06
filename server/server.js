@@ -4,7 +4,10 @@ import cors from 'cors';
 import helmet from 'helmet';
 import nodemailer from 'nodemailer';
 import multer from 'multer';
+import { v2 as cloudinary } from 'cloudinary';
+import streamifier from 'streamifier';
 import path from 'path';
+import fs from 'fs/promises';
 import { fileURLToPath } from 'url';
 import { body, validationResult } from 'express-validator';
 import { rateLimit } from 'express-rate-limit';
@@ -52,19 +55,11 @@ const loginLimiter = rateLimit({
   message: { success: false, message: 'Too many login attempts. Please try again later.' },
 });
 
-// --- Image uploads -----------------------------------------------------
-const uploadStorage = multer.diskStorage({
-  destination: path.join(__dirname, 'uploads'),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
-  },
-});
-
+// --- Image uploads (memory + Cloudinary for serverless deployments) ---
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
 const upload = multer({
-  storage: uploadStorage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
   fileFilter: (req, file, cb) => {
     if (!ALLOWED_IMAGE_TYPES.includes(file.mimetype)) {
@@ -73,6 +68,15 @@ const upload = multer({
     cb(null, true);
   },
 });
+
+// Configure Cloudinary if env vars are present (optional)
+if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+  });
+}
 
 // --- Mail transport ----------------------------------------------------
 const SMTP_USER = process.env.SMTP_USER;
@@ -406,20 +410,55 @@ app.delete('/api/admin/portfolio/:id', requireAdmin, async (req, res) => {
 
 // --- Admin: image upload --------------------------------------------------
 app.post('/api/admin/upload', requireAdmin, (req, res) => {
-  upload.single('image')(req, res, (err) => {
-    if (err) {
-      return res.status(400).json({ success: false, message: err.message });
+  upload.single('image')(req, res, async (err) => {
+    if (err) return res.status(400).json({ success: false, message: err.message });
+    if (!req.file) return res.status(400).json({ success: false, message: 'No image file received.' });
+
+    // If Cloudinary configured, upload there
+    if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
+      try {
+        const streamUpload = (buffer) =>
+          new Promise((resolve, reject) => {
+            const stream = cloudinary.uploader.upload_stream({ folder: 'ifex-uploads' }, (error, result) => {
+              if (result) resolve(result);
+              else reject(error);
+            });
+            streamifier.createReadStream(buffer).pipe(stream);
+          });
+
+        const result = await streamUpload(req.file.buffer);
+        return res.status(201).json({ success: true, url: result.secure_url });
+      } catch (uploadErr) {
+        console.error('Cloudinary upload failed:', uploadErr);
+        return res.status(500).json({ success: false, message: 'Upload failed.' });
+      }
     }
-    if (!req.file) {
-      return res.status(400).json({ success: false, message: 'No image file received.' });
+
+    // Fallback: write to local uploads folder (works for local/stanalone deployments)
+    try {
+      const ext = path.extname(req.file.originalname).toLowerCase();
+      const filename = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+      const outPath = path.join(__dirname, 'uploads');
+      // ensure uploads dir exists
+      await fs.mkdir(outPath, { recursive: true });
+      await fs.writeFile(path.join(outPath, filename), req.file.buffer);
+      const origin = `${req.protocol}://${req.get('host')}`;
+      const url = `${origin}/uploads/${filename}`;
+      return res.status(201).json({ success: true, url });
+    } catch (diskErr) {
+      console.error('Local upload failed:', diskErr);
+      return res.status(500).json({ success: false, message: 'Upload failed.' });
     }
-    const origin = `${req.protocol}://${req.get('host')}`;
-    const url = `${origin}/uploads/${req.file.filename}`;
-    res.status(201).json({ success: true, url });
   });
 });
 
-app.listen(PORT, () => {
-  // eslint-disable-next-line no-console
-  console.log(`iFeX API server running on port ${PORT}`);
-});
+// Only listen when running standalone (local development). Serverless platforms
+// like Vercel will import the app directly.
+if (process.env.STANDALONE === 'true') {
+  app.listen(PORT, () => {
+    // eslint-disable-next-line no-console
+    console.log(`iFeX API server running on port ${PORT}`);
+  });
+}
+
+export default app;
