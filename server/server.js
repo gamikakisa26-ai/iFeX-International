@@ -452,10 +452,12 @@ app.post('/api/admin/upload', requireAdmin, (req, res) => {
   });
 });
 
-// Only listen when running standalone (local development). Serverless platforms
-// like Vercel will import the app directly.
-if (process.env.STANDALONE === 'true') {
-  app.listen(PORT, () => {
+// Listen when the server is started directly (local dev or Render).
+// Serverless platforms import the app without executing the listen call.
+const isDirectExecution = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (process.env.STANDALONE === 'true' || isDirectExecution) {
+  app.listen(PORT, '0.0.0.0', () => {
     // eslint-disable-next-line no-console
     console.log(`iFeX API server running on port ${PORT}`);
   });
