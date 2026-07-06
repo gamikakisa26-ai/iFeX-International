@@ -2,6 +2,27 @@ const ADMIN_TOKEN_KEY = 'ifex_admin_token';
 
 // Use environment variable for API URL, fallback to relative path for dev
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
+const API_ORIGIN = API_BASE.startsWith('http') ? new URL(API_BASE).origin : window.location.origin;
+
+function resolveImageUrl(src) {
+  if (!src) return src;
+  if (src.startsWith('/uploads/')) {
+    return `${API_ORIGIN}${src}`;
+  }
+  return src;
+}
+
+function normalizeContent(payload) {
+  if (!payload) return payload;
+  return {
+    ...payload,
+    portfolio: payload.portfolio?.map((project) => ({
+      ...project,
+      image: resolveImageUrl(project.image),
+      images: project.images?.map(resolveImageUrl) || [],
+    })) || [],
+  };
+}
 
 async function handleResponse(res) {
   const data = await res.json().catch(() => ({}));
@@ -33,7 +54,7 @@ function authHeaders() {
 export async function fetchContent() {
   const res = await fetch(`${API_BASE}/content`);
   const data = await handleResponse(res);
-  return data.data;
+  return normalizeContent(data.data);
 }
 
 // --- Admin auth -------------------------------------------------------------
@@ -115,5 +136,5 @@ export async function adminUploadImage(file) {
     body: formData,
   });
   const data = await handleResponse(res);
-  return data.url;
+  return resolveImageUrl(data.url);
 }

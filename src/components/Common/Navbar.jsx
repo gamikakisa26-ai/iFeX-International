@@ -20,8 +20,8 @@ export default function Navbar() {
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12);
     onScroll();
-    window.addEventListener('scroll', onScroll);
-    return () => window.removeEventListener('scroll', onScroll);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll, { passive: true });
   }, []);
 
   // Lock body scroll while the mobile menu is open
@@ -57,8 +57,8 @@ export default function Navbar() {
         <nav
           className={`flex flex-1 h-14 items-center justify-between rounded-full border px-3 transition-all duration-300 sm:h-16 sm:px-6 ${
             scrolled
-              ? 'border-white/20 bg-white/10 shadow-[0_18px_70px_rgba(6,182,212,0.18)] backdrop-blur-3xl'
-              : 'border-white/10 bg-white/8 shadow-[0_12px_45px_rgba(2,6,23,0.25)] backdrop-blur-2xl'
+              ? 'border-white/20 bg-slate-950/95 shadow-lg backdrop-blur-xl'
+              : 'border-white/10 bg-slate-950/80 shadow-md backdrop-blur-sm'
           }`}
         >
           <div className="flex items-center gap-2">
@@ -110,11 +110,11 @@ export default function Navbar() {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-            className="md:hidden overflow-hidden border-t border-white/10 bg-slate-950/90 backdrop-blur-2xl"
+            transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+            className="md:hidden fixed left-0 right-0 top-16 bottom-0 z-50 overflow-auto border-t border-white/10 bg-slate-950/90 backdrop-blur-2xl"
           >
             <ul className="section-container flex flex-col gap-1 py-6">
-              {navLinksmap((link) => (
+              {navLinks.map((link) => (
                 <li key={link.to}>
                   <NavLink
                     to={link.to}

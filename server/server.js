@@ -75,14 +75,27 @@ const upload = multer({
 });
 
 // --- Mail transport ----------------------------------------------------
+const SMTP_USER = process.env.SMTP_USER;
+const CONTACT_SENDER_EMAIL = process.env.CONTACT_SENDER_EMAIL || SMTP_USER;
+const CONTACT_RECEIVER_EMAIL = process.env.CONTACT_RECEIVER_EMAIL || SMTP_USER;
+
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: Number(process.env.SMTP_PORT) || 465,
   secure: process.env.SMTP_SECURE !== 'false',
   auth: {
-    user: process.env.SMTP_USER,
+    user: SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
+});
+
+// Verify SMTP config at startup so failures are visible in logs
+transporter.verify().then(() => {
+  // eslint-disable-next-line no-console
+  console.log('SMTP connection verified');
+}).catch((err) => {
+  // eslint-disable-next-line no-console
+  console.error('SMTP verification failed:', err);
 });
 
 // --- Validation rules ----------------------------------------------------
@@ -145,13 +158,17 @@ app.post('/api/contact', contactLimiter, contactValidationRules, async (req, res
   const { name, email, phone, company, service, budget, message } = req.body;
 
   try {
-    await transporter.sendMail({
-      from: `"iFeX Website" <${process.env.CONTACT_SENDER_EMAIL}>`,
-      to: process.env.CONTACT_RECEIVER_EMAIL,
+    const info = await transporter.sendMail({
+      from: `"iFeX Website" <${CONTACT_SENDER_EMAIL}>`,
+      to: CONTACT_RECEIVER_EMAIL,
       replyTo: email,
       subject: `New Inquiry: ${service} — ${name}`,
       html: buildEmailHtml({ name, email, phone, company, service, budget, message }),
     });
+
+    // Log send result for troubleshooting (messageId, response)
+    // eslint-disable-next-line no-console
+    console.log('Contact email sent:', { messageId: info.messageId, response: info.response });
 
     return res.status(200).json({
       success: true,
@@ -159,7 +176,7 @@ app.post('/api/contact', contactLimiter, contactValidationRules, async (req, res
     });
   } catch (err) {
     // eslint-disable-next-line no-console
-    console.error('Failed to send contact email:', err.message);
+    console.error('Failed to send contact email:', err);
     return res.status(502).json({
       success: false,
       message: 'We could not send your message right now. Please try again shortly.',
