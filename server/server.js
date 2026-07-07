@@ -81,8 +81,8 @@ if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && proce
 
 // --- Mail transport ----------------------------------------------------
 const SMTP_USER = process.env.SMTP_USER;
-const CONTACT_SENDER_EMAIL = process.env.CONTACT_SENDER_EMAIL || SMTP_USER;
-const CONTACT_RECEIVER_EMAIL = process.env.CONTACT_RECEIVER_EMAIL || SMTP_USER;
+const CONTACT_SENDER_EMAIL = process.env.CONTACT_SENDER_EMAIL || ifexinternational@gmail.com;
+const CONTACT_RECEIVER_EMAIL = process.env.CONTACT_RECEIVER_EMAIL || ifexinternational@gmail.com;
 
 // Create transporter with a fallback (try configured port first, then 587)
 let transporter;
@@ -107,9 +107,9 @@ const smtpCandidates = [
         auth: smtpAuth,
         tls: cfg.tls || undefined,
         // short timeouts to fail fast and get actionable logs
-        connectionTimeout: 10000,
-        greetingTimeout: 10000,
-        socketTimeout: 10000,
+        connectionTimeout: 30000,
+        greetingTimeout: 30000,
+        socketTimeout: 30000,
         logger: false,
         debug: false,
       });
