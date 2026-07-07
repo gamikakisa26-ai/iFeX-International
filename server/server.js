@@ -87,14 +87,14 @@ const CONTACT_RECEIVER_EMAIL = process.env.CONTACT_RECEIVER_EMAIL || SMTP_USER;
 // Create transporter with a fallback (try configured port first, then 587)
 let transporter;
 const smtpHost = process.env.SMTP_HOST;
-const configuredPort = Number(process.env.SMTP_PORT) || 587;
+const configuredPort = Number(process.env.SMTP_PORT) || 465;
 const configuredSecure = process.env.SMTP_SECURE !== 'true';
 const smtpAuth = { user: SMTP_USER, pass: process.env.SMTP_PASS };
 
 const smtpCandidates = [
   { host: smtpHost, port: configuredPort, secure: configuredSecure },
   // fallback: submission port with STARTTLS
-  { host: smtpHost, port: 587, secure: true, tls: { ciphers: 'TLSv1.2' } },
+  { host: smtpHost, port: 465, secure: true, tls: { ciphers: 'TLSv1.2' } },
 ];
 
 (async function initSmtp() {
