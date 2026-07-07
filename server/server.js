@@ -94,7 +94,7 @@ const smtpAuth = { user: SMTP_USER, pass: process.env.SMTP_PASS };
 const smtpCandidates = [
   { host: smtpHost, port: configuredPort, secure: configuredSecure },
   // fallback: submission port with STARTTLS
-  { host: smtpHost, port: 465, secure: true, tls: { ciphers: 'TLSv1.2' } },
+  { host: smtpHost, port: 587, secure: false, tls: { ciphers: 'TLSv1.2' } },
 ];
 
 (async function initSmtp() {
