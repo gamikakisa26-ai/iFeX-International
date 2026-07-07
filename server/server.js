@@ -99,7 +99,8 @@ const transporter = nodemailer.createTransport({
   socketTimeout: 30000,
 });
 
-      // attempt verify await candidate.verify();
+      // attempt verify 
+      await candidate.verify();
       
       transporter = candidate;
       // eslint-disable-next-line no-console
