@@ -88,7 +88,7 @@ const CONTACT_RECEIVER_EMAIL = process.env.CONTACT_RECEIVER_EMAIL || SMTP_USER;
 let transporter;
 const smtpHost = process.env.SMTP_HOST;
 const configuredPort = Number(process.env.SMTP_PORT) || 465;
-const configuredSecure = process.env.SMTP_SECURE !== 'false';
+const configuredSecure = process.env.SMTP_SECURE !== 'true';
 const smtpAuth = { user: SMTP_USER, pass: process.env.SMTP_PASS };
 
 const smtpCandidates = [
@@ -107,12 +107,13 @@ const smtpCandidates = [
         auth: smtpAuth,
         tls: cfg.tls || undefined,
         // short timeouts to fail fast and get actionable logs
-        connectionTimeout: 10000,
-        greetingTimeout: 10000,
-        socketTimeout: 10000,
+        connectionTimeout: 60000,
+        greetingTimeout: 60000,
+        socketTimeout: 60000,
         logger: false,
         debug: false,
       });
+
 
       // attempt verify
       await candidate.verify();
