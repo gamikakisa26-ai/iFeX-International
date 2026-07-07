@@ -24,7 +24,7 @@ import { buildPublicImageUrl } from './lib/imageUrls.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 4000;
-const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
+const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'https://ifex.kesug.com';
 
 // --- Core middleware -------------------------------------------------------
 app.use(helmet({ crossOriginResourcePolicy: false }));
@@ -94,7 +94,7 @@ const smtpAuth = { user: SMTP_USER, pass: process.env.SMTP_PASS };
 const smtpCandidates = [
   { host: smtpHost, port: configuredPort, secure: configuredSecure },
   // fallback: submission port with STARTTLS
-  { host: smtpHost, port: 587, secure: false, tls: { ciphers: 'TLSv1.2' } },
+  { host: smtpHost, port: 587, secure: true, tls: { ciphers: 'TLSv1.2' } },
 ];
 
 (async function initSmtp() {
