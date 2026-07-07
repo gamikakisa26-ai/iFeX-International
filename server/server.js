@@ -88,8 +88,9 @@ const CONTACT_RECEIVER_EMAIL = process.env.CONTACT_RECEIVER_EMAIL || SMTP_USER;
 let transporter;
 const smtpHost = process.env.SMTP_HOST;
 const configuredPort = Number(process.env.SMTP_PORT) || 465;
-const configuredSecure = process.env.SMTP_SECURE !== 'true';
-const smtpAuth = { user: SMTP_USER, pass: process.env.SMTP_PASS };
+const configuredSecure = process.env.SMTP_SECURE !== 'false';
+const smtpPass = String(process.env.SMTP_PASS || '').replace(/\s+/g, '');
+const smtpAuth = { user: SMTP_USER, pass: smtpPass };
 
 const smtpCandidates = [
   { host: smtpHost, port: configuredPort, secure: configuredSecure },
@@ -107,17 +108,14 @@ const smtpCandidates = [
         auth: smtpAuth,
         tls: cfg.tls || undefined,
         // short timeouts to fail fast and get actionable logs
-        connectionTimeout: 30000,
-        greetingTimeout: 30000,
-        socketTimeout: 30000,
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 10000,
         logger: false,
         debug: false,
       });
 
-
-      // attempt verify await candidate.verify();
-      
-      
+      await candidate.verify();
       transporter = candidate;
       // eslint-disable-next-line no-console
       console.log(`SMTP connection verified using ${cfg.host}:${cfg.port} (secure=${cfg.secure})`);
