@@ -81,26 +81,42 @@ if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && proce
 
 // --- Mail transport ----------------------------------------------------
 const SMTP_USER = process.env.SMTP_USER;
-const SMTP_PASS = process.env.SMTP_PASS;
-
 const CONTACT_SENDER_EMAIL = process.env.CONTACT_SENDER_EMAIL || SMTP_USER;
 const CONTACT_RECEIVER_EMAIL = process.env.CONTACT_RECEIVER_EMAIL || SMTP_USER;
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || "smtp.gmail.com",
-  port: Number(process.env.SMTP_PORT) || 587,
-  secure: process.env.SMTP_SECURE === "true", // false for 587
-  auth: {
-    user: SMTP_USER,
-    pass: SMTP_PASS,
-  },
-  connectionTimeout: 30000,
-  greetingTimeout: 30000,
-  socketTimeout: 30000,
-});
+// Create transporter with a fallback (try configured port first, then 587)
+let transporter;
+const smtpHost = process.env.SMTP_HOST;
+const configuredPort = Number(process.env.SMTP_PORT) || 465;
+const configuredSecure = process.env.SMTP_SECURE !== 'true';
+const smtpAuth = { user: SMTP_USER, pass: process.env.SMTP_PASS };
 
-      // attempt verify 
-      await candidate.verify();
+const smtpCandidates = [
+  { host: smtpHost, port: configuredPort, secure: configuredSecure },
+  // fallback: submission port with STARTTLS
+  { host: smtpHost, port: 587, secure: false, tls: { ciphers: 'TLSv1.2' } },
+];
+
+(async function initSmtp() {
+  for (const cfg of smtpCandidates) {
+    try {
+      const candidate = nodemailer.createTransport({
+        host: cfg.host,
+        port: cfg.port,
+        secure: cfg.secure,
+        auth: smtpAuth,
+        tls: cfg.tls || undefined,
+        // short timeouts to fail fast and get actionable logs
+        connectionTimeout: 30000,
+        greetingTimeout: 30000,
+        socketTimeout: 30000,
+        logger: false,
+        debug: false,
+      });
+
+
+      // attempt verify await candidate.verify();
+      
       
       transporter = candidate;
       // eslint-disable-next-line no-console
