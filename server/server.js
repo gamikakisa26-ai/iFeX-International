@@ -107,9 +107,9 @@ const smtpCandidates = [
         auth: smtpAuth,
         tls: cfg.tls || undefined,
         // short timeouts to fail fast and get actionable logs
-        connectionTimeout: 30000,
-        greetingTimeout: 30000,
-        socketTimeout: 30000,
+        connectionTimeout: 60000,
+        greetingTimeout: 60000,
+        socketTimeout: 60000,
         logger: false,
         debug: false,
       });
