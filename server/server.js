@@ -89,8 +89,7 @@ let transporter;
 const smtpHost = process.env.SMTP_HOST;
 const configuredPort = Number(process.env.SMTP_PORT) || 465;
 const configuredSecure = process.env.SMTP_SECURE !== 'false';
-const smtpPass = String(process.env.SMTP_PASS || '').replace(/\s+/g, '');
-const smtpAuth = { user: SMTP_USER, pass: smtpPass };
+const smtpAuth = { user: SMTP_USER, pass: process.env.SMTP_PASS };
 
 const smtpCandidates = [
   { host: smtpHost, port: configuredPort, secure: configuredSecure },
@@ -115,6 +114,7 @@ const smtpCandidates = [
         debug: false,
       });
 
+      // attempt verify
       await candidate.verify();
       transporter = candidate;
       // eslint-disable-next-line no-console
